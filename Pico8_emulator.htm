@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PICO-8 Ultimate Joystick & GPad Player</title>
+    <style>
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; touch-action: none; }
+        body { background-color: #1a1a1a; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        
+        .emulator-container { display: flex; width: 100vw; height: 100vh; align-items: center; justify-content: space-between; padding: 0 40px; }
+        
+        .screen-area { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; padding: 5px; position: relative; }
+        
+        #pico8-holder { background-color: #000; height: 92vh; width: 92vh; max-width: 100%; border: 4px solid #29adff; border-radius: 8px; overflow: hidden; position: relative; }
+        iframe { width: 100%; height: 100%; border: none; display: block; background: #000; }
+
+        .system-buttons { display: flex; gap: 15px; margin-top: 10px; align-items: center; }
+        .btn-sys { background-color: #555; color: white; padding: 8px 15px; border-radius: 20px; font-weight: bold; font-size: 13px; border: 2px solid #777; box-shadow: 0 4px #222; cursor: pointer; transition: all 0.05s ease; }
+        
+        .btn-sys.pressed-sys { transform: translateY(2px); box-shadow: 0 2px #222; background-color: #777; }
+        
+        .file-input-label { background-color: #00e436; color: #000; border-color: #a7f4a7; }
+        
+        .mute-btn { background-color: #ff004d; color: white; border-color: #ff77a8; }
+        .mute-btn.unmuted { background-color: #29adff; border-color: #7eceff; }
+
+        .left-controls-area { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 220px; }
+        
+        .toggle-ctrl-btn { background-color: #ffa300; color: #000; border-color: #ffec27; font-size: 12px; }
+
+        .control-wrapper { width: 170px; height: 170px; display: flex; justify-content: center; align-items: center; position: relative; }
+        
+        .joystick-container { width: 160px; height: 160px; background: rgba(255,255,255,0.1); border: 4px solid #666; border-radius: 50%; display: flex; justify-content: center; align-items: center; position: relative; box-shadow: inset 0 0 15px rgba(0,0,0,0.6); }
+        .joystick-knob { width: 65px; height: 65px; background: #444; border: 3px solid #888; border-radius: 50%; position: absolute; box-shadow: 0 6px #222; }
+
+        .dpad-container { width: 160px; height: 160px; position: relative; display: none; }
+        .dpad-btn { position: absolute; background-color: #333; border: 2px solid #555; box-shadow: 0 4px #112; border-radius: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 18px; color: #aaa; }
+        .dpad-btn.pressed-gpad { background-color: #29adff; color: #fff; border-color: #7eceff; transform: scale(0.95); box-shadow: 0 1px #112; }
+        
+        .dpad-up    { top: 0; left: 55px; width: 50px; height: 55px; border-bottom: none; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+        .dpad-down  { bottom: 0; left: 55px; width: 50px; height: 55px; border-top: none; border-top-left-radius: 0; border-top-right-radius: 0; }
+        .dpad-left  { top: 55px; left: 0; width: 55px; height: 50px; border-right: none; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+        .dpad-right { top: 55px; right: 0; width: 55px; height: 50px; border-left: none; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+        .dpad-center { position: absolute; top: 55px; left: 55px; width: 50px; height: 50px; background: #333; z-index: 1; }
+
+        .controls { width: 200px; height: 200px; display: flex; flex-shrink: 0; margin-bottom: 20px; }
+        .action-buttons { display: flex; justify-content: space-around; align-items: center; gap: 20px; }
+        
+        .btn-action { width: 85px; height: 85px; border-radius: 50%; font-size: 28px; font-weight: bold; color: white; display: flex; justify-content: center; align-items: center; border: 2px solid; box-shadow: 0 6px #222; cursor: pointer; transition: transform 0.05s ease, box-shadow 0.05s ease; }
+        
+        .btn-o { background-color: #ff004d; border-color: #ff77a8; } 
+        .btn-x { background-color: #ffec27; border-color: #fff1e8; color: #000; } 
+        
+        .btn-o.pressed-action { transform: translateY(4px) !important; box-shadow: 0 2px #222 !important; background-color: #ff527b !important; border-color: #ffec27 !important; }
+        .btn-x.pressed-action { transform: translateY(4px) !important; box-shadow: 0 2px #222 !important; background-color: #ffa300 !important; color: #fff !important; border-color: #ffec27 !important; }
+
+        .fullscreen-btn { background-color: #29adff; color: white; border-color: #7eceff; }
+    </style>
+</head>
+<body>
+
+    <div class="emulator-container" id="main-container">
+        <div class="left-controls-area">
+            <div class="btn-sys fullscreen-btn" id="btn-fullscreen">🖥️full screen  </div>
+            <div class="btn-sys toggle-ctrl-btn" id="btn-toggle-ctrl">🔄  : G-Pad</div>
+            
+            <div class="control-wrapper">
+                <div class="joystick-container" id="joy-container">
+                    <div class="joystick-knob" id="joy-knob"></div>
+                </div>
+
+                <div class="dpad-container" id="dpad-container">
+                    <div class="dpad-center"></div>
+                    <div class="dpad-btn dpad-up" id="gpad-up">▲</div>
+                    <div class="dpad-btn dpad-down" id="gpad-down">▼</div>
+                    <div class="dpad-btn dpad-left" id="gpad-left">◀</div>
+                    <div class="dpad-btn dpad-right" id="gpad-right">▶</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="screen-area">
+            <div id="pico8-holder">
+                <iframe id="pico-frame" srcdoc="<html><body style='background:#1d2b53;color:#fff;font-family:monospace;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;'><h3>READY: LOAD .JS FILE</h3></body></html>"></iframe>
+            </div>
+            
+            <div class="system-buttons">
+                <label for="rom-file" class="btn-sys file-input-label">📁  choose the cartridge</label>
+                <input type="file" id="rom-file" accept=".js" style="display: none;">
+                
+                <div class="btn-sys" id="btn-menu">MENU</div>
+                <div class="btn-sys" id="btn-pause">START / PAUSE</div>
+                <div class="btn-sys mute-btn unmuted" id="btn-mute">🔊 sound</div>
+            </div>
+        </div>
+
+        <div class="controls action-buttons">
+            <div class="btn-action btn-o" id="btn-o">O</div>
+            <div class="btn-action btn-x" id="btn-x">X</div>
+        </div>
+    </div>
+
+    <script>
+        let isMuted = false;
+
+        const keyConfigMap = {
+            "ArrowLeft":  { key: "ArrowLeft",  keyCode: 37 },
+            "ArrowRight": { key: "ArrowRight", keyCode: 39 },
+            "ArrowUp":    { key: "ArrowUp",    keyCode: 38 },
+            "ArrowDown":  { key: "ArrowDown",  keyCode: 40 },
+            "gpad-up":    { key: "ArrowUp",    keyCode: 38 },
+            "gpad-down":  { key: "ArrowDown",  keyCode: 40 },
+            "gpad-left":  { key: "ArrowLeft",  keyCode: 37 },
+            "gpad-right": { key: "ArrowRight", keyCode: 39 },
+            "btn-o":      { key: "z",          keyCode: 90 },
+            "btn-x":      { key: "x",          keyCode: 88 },
+            "btn-menu":   { key: "Enter",      keyCode: 13 },
+            "btn-pause":  { key: "p",          keyCode: 80 }
+        };
+
+        function sendKeyEvent(keyName, eventType) {
+            const frame = document.getElementById("pico-frame");
+            const config = keyConfigMap[keyName];
+            if (frame && frame.contentWindow && config) {
+                frame.contentWindow.postMessage({
+                    type: "PICO_KEY",
+                    action: eventType,
+                    config: config
+                }, "*");
+            }
+        }
+
+        
+        function sendMuteEvent(muteState) {
+            const frame = document.getElementById("pico-frame");
+            if (frame && frame.contentWindow) {
+                frame.contentWindow.postMessage({
+                    type: "PICO_MUTE",
+                    isMuted: muteState
+                }, "*");
+            }
+        }
+
+        function triggerHaptic() {
+            if (navigator.vibrate) {
+                navigator.vibrate(15);
+            }
+        }
+
+        
+        ["btn-o", "btn-x", "btn-menu", "btn-pause", "btn-mute"].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const pressedClass = el.classList.contains("btn-action") ? "pressed-action" : "pressed-sys";
+
+            el.addEventListener("touchstart", (e) => { 
+                e.preventDefault(); e.stopPropagation(); 
+                el.classList.add(pressedClass); triggerHaptic(); 
+                if (id !== "btn-mute") sendKeyEvent(id, "keydown"); 
+            }, { passive: false });
+            el.addEventListener("touchend", (e) => { 
+                e.preventDefault(); e.stopPropagation(); 
+                el.classList.remove(pressedClass); 
+                if (id !== "btn-mute") sendKeyEvent(id, "keyup"); 
+            }, { passive: false });
+
+            el.addEventListener("mousedown", () => { el.classList.add(pressedClass); if (id !== "btn-mute") sendKeyEvent(id, "keydown"); });
+            el.addEventListener("mouseup", () => { el.classList.remove(pressedClass); if (id !== "btn-mute") sendKeyEvent(id, "keyup"); });
+            el.addEventListener("mouseleave", () => { el.classList.remove(pressedClass); });
+        });
+
+        
+        const btnMute = document.getElementById("btn-mute");
+        btnMute.addEventListener("click", () => {
+            isMuted = !isMuted;
+            sendMuteEvent(isMuted);
+            if (isMuted) {
+                btnMute.innerHTML = "sound:work";
+                btnMute.classList.remove("unmuted");
+            } else {
+                btnMute.innerHTML = "sound:closed";
+                btnMute.classList.add("unmuted");
+            }
+        });
+
+        // ========================================================
+        // gbad buttons
+        // ========================================================
+        ["gpad-up", "gpad-down", "gpad-left", "gpad-right"].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+
+            el.addEventListener("touchstart", (e) => {
+                e.preventDefault(); e.stopPropagation();
+                el.classList.add("pressed-gpad"); triggerHaptic(); sendKeyEvent(id, "keydown");
+            }, { passive: false });
+            el.addEventListener("touchend", (e) => {
+                e.preventDefault(); e.stopPropagation();
+                el.classList.remove("pressed-gpad"); sendKeyEvent(id, "keyup");
+            }, { passive: false });
+
+            el.addEventListener("mousedown", () => { el.classList.add("pressed-gpad"); sendKeyEvent(id, "keydown"); });
+            el.addEventListener("mouseup", () => { el.classList.remove("pressed-gpad"); sendKeyEvent(id, "keyup"); });
+            el.addEventListener("mouseleave", () => { el.classList.remove("pressed-gpad"); });
+        });
+
+        // ========================================================
+        // Joystick buttons
+        // ========================================================
+        const joyContainer = document.getElementById("joy-container");
+        const joyKnob = document.getElementById("joy-knob");
+        let joyTouchId = null; let startX, startY; const maxDistance = 50;
+        let activeDirections = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false };
+
+        function handleJoyStart(e) {
+            if (joyTouchId !== null) return; 
+            if (e.touches) {
+                const touch = e.changedTouches[0]; joyTouchId = touch.identifier; startX = touch.clientX; startY = touch.clientY;
+            } else {
+                startX = e.clientX; startY = e.clientY; joyTouchId = "mouse";
+            }
+            joyKnob.style.transition = "none";
+        }
+
+        function handleJoyMove(e) {
+            if (joyTouchId === null) return;
+            let touch = null;
+            if (e.touches) {
+                for (let i = 0; i < e.touches.length; i++) {
+                    if (e.touches[i].identifier === joyTouchId) { touch = e.touches[i]; break; }
+                }
+            } else if (joyTouchId === "mouse") { touch = e; }
+            if (!touch) return;
+            if (e.cancelable) e.preventDefault();
+            
+            let deltaX = touch.clientX - startX; let deltaY = touch.clientY - startY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            if (distance > maxDistance) { deltaX = (deltaX / distance) * maxDistance; deltaY = (deltaY / distance) * maxDistance; }
+
+            joyKnob.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+            const threshold = 15;
+            updateDirectionState("ArrowLeft", deltaX < -threshold);
+            updateDirectionState("ArrowRight", deltaX > threshold);
+            updateDirectionState("ArrowUp", deltaY < -threshold);
+            updateDirectionState("ArrowDown", deltaY > threshold);
+        }
+
+        function handleJoyEnd(e) {
+            if (joyTouchId === null) return;
+            if (e.touches) {
+                let hasJoystickTouch = false;
+                for (let i = 0; i < e.touches.length; i++) { if (e.touches[i].identifier === joyTouchId) hasJoystickTouch = true; }
+                if (hasJoystickTouch) return; 
+            }
+            joyTouchId = null; joyKnob.style.transition = "transform 0.2s ease-out"; joyKnob.style.transform = "translate(0px, 0px)";
+            Object.keys(activeDirections).forEach(dir => updateDirectionState(dir, false));
+        }
+
+        function updateDirectionState(dir, shouldBeActive) {
+            if (activeDirections[dir] !== shouldBeActive) { activeDirections[dir] = shouldBeActive; sendKeyEvent(dir, shouldBeActive ? "keydown" : "keyup"); }
+        }
+
+        joyContainer.addEventListener("touchstart", handleJoyStart, { passive: false });
+        window.addEventListener("touchmove", handleJoyMove, { passive: false });
+        window.addEventListener("touchend", handleJoyEnd); window.addEventListener("touchcancel", handleJoyEnd);
+        joyContainer.addEventListener("mousedown", handleJoyStart); window.addEventListener("mousemove", handleJoyMove); window.addEventListener("mouseup", handleJoyEnd);
+
+        // ========================================================
+        // controls system 
+        // ========================================================
+        const btnToggleCtrl = document.getElementById("btn-toggle-ctrl");
+        const dpadContainer = document.getElementById("dpad-container");
+        let currentController = "joystick";
+
+        btnToggleCtrl.addEventListener("click", () => {
+            triggerHaptic();
+            if (currentController === "joystick") {
+                joyContainer.style.display = "none";
+                dpadContainer.style.display = "block";
+                btnToggleCtrl.innerHTML = "Joystick";
+                currentController = "gpad";
+            } else {
+                dpadContainer.style.display = "none";
+                joyContainer.style.display = "flex";
+                btnToggleCtrl.innerHTML = "gpad";
+                currentController = "joystick";
+                Object.keys(activeDirections).forEach(dir => updateDirectionState(dir, false));
+                joyKnob.style.transform = "translate(0px, 0px)";
+            }
+        });
+
+        // ========================================================
+        // full screen system 
+        // ========================================================
+        const fullscreenBtn = document.getElementById("btn-fullscreen");
+        const mainContainer = document.getElementById("main-container");
+
+        fullscreenBtn.addEventListener("click", () => {
+            if (!document.fullscreenElement) {
+                mainContainer.requestFullscreen().catch(err => { alert(`خطأ: ${err.message}`); });
+                fullscreenBtn.innerHTML = "small screen";
+            } else {
+                document.exitFullscreen();
+                fullscreenBtn.innerHTML = "full screen";
+            }
+        });
+
+        document.addEventListener("fullscreenchange", () => {
+            if (!document.fullscreenElement) fullscreenBtn.innerHTML = "full screen";
+        });
+
+        // ========================================================
+        // cartridge system 
+        // ========================================================
+        document.getElementById('rom-file').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const gameCode = event.target.result;
+                const iframeHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <style>
+                            body, html { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; display:flex; justify-content:center; align-items:center; }
+                            canvas { width:100% !important; height:100% !important; image-rendering:pixelated; }
+                        </style>
+                    </head>
+                    <body>
+                        <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="1"></canvas>
+                        <script>
+                            // إمساك الـ AudioContext فوراً وتخزينه للتحكم به
+                            var activeAudioContexts = [];
+                            var originalAudioContext = window.AudioContext || window.webkitAudioContext;
+                            if (originalAudioContext) {
+                                var HookedAudioContext = function() {
+                                    var ctx = new originalAudioContext();
+                                    activeAudioContexts.push(ctx);
+                                    return ctx;
+                                };
+                                window.AudioContext = HookedAudioContext;
+                                window.webkitAudioContext = HookedAudioContext;
+                            }
+
+                            var Module = { canvas: document.getElementById('canvas'), arguments: [] };
+                            
+                            window.addEventListener("message", function(e) {
+                                if (!e.data) return;
+                                
+                                if (e.data.type === "PICO_KEY") {
+                                    const targetCanvas = document.getElementById('canvas');
+                                    const keyEvent = new KeyboardEvent(e.data.action, {
+                                        key: e.data.config.key,
+                                        keyCode: e.data.config.keyCode,
+                                        which: e.data.config.keyCode,
+                                        bubbles: true,
+                                        cancelable: true
+                                    });
+                                    targetCanvas.dispatchEvent(keyEvent);
+                                    window.dispatchEvent(keyEvent);
+                                }
+                                
+                                // آلية كتم الصوت المضمونة بالداخل
+                                if (e.data.type === "PICO_MUTE") {
+                                    activeAudioContexts.forEach(function(ctx) {
+                                        if (e.data.isMuted) {
+                                            ctx.suspend();
+                                        } else {
+                                            ctx.resume();
+                                        }
+                                    });
+                                }
+                            });
+                            ${gameCode}
+                        <\/script>
+                    </body>
+                    </html>
+                `;
+                document.getElementById("pico-frame").srcdoc = iframeHtml;
+                isMuted = false;
+                btnMute.innerHTML = "sound:work";
+                btnMute.classList.add("unmuted");
+            };
+            reader.readAsText(file);
+        });
+    </script>
+</body>
+</html>
